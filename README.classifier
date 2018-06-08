@@ -1,0 +1,63 @@
+To help analyze taprio scheduling characteristics, we've developed a custom
+tool called 'dump-classifier'.
+
+
+dump-classifier
+===============
+
+dump-classifier aims to ease the test/verification of how well an
+implementation runs 802.1Qbv-like schedules.
+
+
+How to compile
+--------------
+
+* Dependencies:
+
+  - libpcap-dev
+
+
+Just running 'make' should work, if all the dependencies are met:
+
+$ make
+
+
+How to run
+----------
+
+$ ./dump-classifier -s <SCHED FILE> -f <FILTER FILE> -b <BASE TIME> -d <DUMP FILE>
+
+<SCHED FILE> is a text file containg the traffic schedule, the format
+is exactly the same as taprio (the qdisc) accepts.
+
+Example:
+-----<cut
+S 01 500000
+S 02 500000
+----->end
+
+<FILTER FILE> allows different traffic classes to be indentified in a
+pcap dump file, it has the following format is contains a traffic
+class name and a pcap expression on each line, any traffic class that
+doesn't have a filter associated will be classified as "BE" (best
+effort). The order is important, as the first line will match the
+first traffic class (bit 0) in the gatemask parameter (the second
+field of each line of the schedule file), the second line will match
+the second traffic class (bit 1), and so on.
+
+Example:
+-----<cut
+talker :: ether dst aa:aa:aa:aa:aa:aa
+----->end
+
+<BASE TIME> an absolute time in nanoseconds where the schedule
+started, if that time is before the timestamp of the first packet in
+the <DUMP FILE>, the schedule will run until it reaches that
+timestamp, packets that have a timestamp before basetime will be
+ignored.
+
+<DUMP FILE> is a dump file captured via tcpdump, with timestamp
+precision in nanoseconds, so captured using something like this:
+
+$ tcpdump -j adapter_unsynced --time-stamp-precision=nanos -i enp2s0 -w dump.pcap
+
