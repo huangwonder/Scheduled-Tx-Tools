@@ -42,13 +42,13 @@ fi
 # is also running one end of the TSN application (either the listener or the
 # talker), which requires the local clocks to be synchronized.
 #
-# When that isn't the case (i.e. the tbs experiment, in which all we care
+# When that isn't the case (i.e. the etf experiment, in which all we care
 # about is the network clock sync), then just start this script with -m
 # instead so phc2sys is not used and the jitter of the network clock sync is
 # not affected.
 #
 setup_ptp_master() {
-	ptp4l -i $INTERFACE $PTP4L_VERBOSE &
+	ptp4l -2 -i $INTERFACE $PTP4L_VERBOSE &
 }
 
 setup_ptp_master_and_sync() {
@@ -61,7 +61,7 @@ setup_ptp_master_and_sync() {
 # then synchronize the system clock to the PHC.
 setup_ptp_slave() {
 	phc2sys -a -r $PHC2SYS_VERBOSE &
-	ptp4l -s -i $INTERFACE $PTP4L_VERBOSE &
+	ptp4l -2 -s -i $INTERFACE $PTP4L_VERBOSE &
 }
 
 

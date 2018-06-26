@@ -1,5 +1,5 @@
 Here we present the steps taken for setting up a test that uses both
-the TBS qdisc and the TAPRIO one. That means that we'll use a (Qbv-like)
+the ETF qdisc and the TAPRIO one. That means that we'll use a (Qbv-like)
 port scheduler with a fixed Tx schedule for traffic classes (TC), while
 using Time-based transmission for controlling the Tx time of packets within
 each TC.
@@ -20,7 +20,7 @@ time-slice.
 
 The application enqueueing packets for TC 1 will set its packets *deadline*
 with an offset of 250us within its time-slice. However, because this TC is
-using the deadline mode of SO_TXTIME + tbs, then a packet maybe transmitted
+using the deadline mode of SO_TXTIME + etf, then a packet maybe transmitted
 at anytime within its time slice that is before its deadline.
 
 Best-effort traffic is transmitted at anytime during the third time slice.
@@ -121,16 +121,16 @@ qdiscs and the applications.
             - the reference clock is CLOCK_TAI;
 
 
-      2.2) Setup tbs for queue TC 0:
+      2.2) Setup etf for queue TC 0:
 
-	tc qdisc replace dev enp3s0 parent 100:1 tbs clockid CLOCK_TAI \
-	  delta 200000 sorting offload
+	tc qdisc replace dev enp3s0 parent 100:1 etf clockid CLOCK_TAI \
+	  delta 200000 offload
 
 
-      2.3) Setup tbs in deadline mode for TC 1:
+      2.3) Setup etf in deadline mode for TC 1:
 
-	tc qdisc replace dev enp3s0 parent 100:2 tbs clockid CLOCK_TAI \
-	  delta 200000 sorting offload deadline
+	tc qdisc replace dev enp3s0 parent 100:2 etf clockid CLOCK_TAI \
+	  delta 200000 offload deadline_mode
 
 
     3) Start time sync (ptp slave):
