@@ -61,19 +61,32 @@
 #define SCM_TXTIME		SO_TXTIME
 #endif
 
-#ifndef SO_EE_CODE_TXTIME_INVALID_PARAM
-#define SO_EE_CODE_TXTIME_INVALID_PARAM	2
-#define SO_EE_CODE_TXTIME_MISSED	3
+#ifndef SO_EE_ORIGIN_TXTIME
+#define SO_EE_ORIGIN_TXTIME		6
+#define SO_EE_CODE_TXTIME_INVALID_PARAM	1
+#define SO_EE_CODE_TXTIME_MISSED	2
 #endif
 
 #define pr_err(s)	fprintf(stderr, s "\n")
 #define pr_info(s)	fprintf(stdout, s "\n")
 
-/* The parameter for SO_TXTIME is the below struct. */
+/* The API for SO_TXTIME is the below struct and enum, which will be
+ * provided by uapi/linux/net_tstamp.h in the near future.
+ */
 struct sock_txtime {
 	clockid_t clockid;
 	uint16_t flags;
 };
+
+enum txtime_flags {
+	SOF_TXTIME_DEADLINE_MODE = (1 << 0),
+	SOF_TXTIME_REPORT_ERRORS = (1 << 1),
+
+	SOF_TXTIME_FLAGS_LAST = SOF_TXTIME_REPORT_ERRORS,
+	SOF_TXTIME_FLAGS_MASK = (SOF_TXTIME_FLAGS_LAST - 1) |
+				 SOF_TXTIME_FLAGS_LAST
+};
+
 
 static int running = 1, use_so_txtime = 1;
 static int period_nsec = DEFAULT_PERIOD;
@@ -294,7 +307,7 @@ static int process_socket_error_queue(int fd)
 	cmsg = CMSG_FIRSTHDR(&msg);
 	while (cmsg != NULL) {
 		serr = (void *) CMSG_DATA(cmsg);
-		if (serr->ee_origin == SO_EE_ORIGIN_LOCAL) {
+		if (serr->ee_origin == SO_EE_ORIGIN_TXTIME) {
 			tstamp = ((__u64) serr->ee_data << 32) + serr->ee_info;
 
 			switch(serr->ee_code) {
@@ -479,10 +492,10 @@ int main(int argc, char *argv[])
 			so_priority = atoi(optarg);
 			break;
 		case 'D':
-			use_deadline_mode = (1 << 0);
+			use_deadline_mode = SOF_TXTIME_DEADLINE_MODE;
 			break;
 		case 'E':
-			receive_errors = (1 << 1);
+			receive_errors = SOF_TXTIME_REPORT_ERRORS;
 			break;
 		case 'b':
 			base_time = atoll(optarg);
