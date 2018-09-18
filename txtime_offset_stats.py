@@ -59,15 +59,15 @@ def compute_offsets_stats(file_path):
             total_sqr_dist += delta * new_delta
 
         if count != 0.0:
-	        variance = total_sqr_dist / (count - 1)
-	        std_dev = math.sqrt(variance)
+            variance = total_sqr_dist / (count - 1)
+            std_dev = math.sqrt(variance)
 
-	        print("min:\t\t%e" % min_t)
-	        print("max:\t\t%e" % max_t)
-	        print("jitter (pk-pk):\t%e" % (max_t - min_t))
-	        print("avg:\t\t%e" % mean)
-	        print("std dev:\t%e" % std_dev)
-	        print("count:\t\t%d" % count)
+            print("min:\t\t%e" % min_t)
+            print("max:\t\t%e" % max_t)
+            print("jitter (pk-pk):\t%e" % (max_t - min_t))
+            print("avg:\t\t%e" % mean)
+            print("std dev:\t%e" % std_dev)
+            print("count:\t\t%d" % count)
 
 
 def main():

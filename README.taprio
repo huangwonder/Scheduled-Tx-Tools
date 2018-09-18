@@ -108,12 +108,12 @@ qdiscs and the applications.
 	i=$((`date +%s%N` + 37000000000 + (2 * 60 * 1000000000))) ;       \
 	base=$(($i - ($i % 1000000000))) ;                                \
 	tc qdisc add dev enp3s0 parent root handle 100 taprio num_tc 3    \
-	  map 2 2 1 0 2 2 2 2 2 2 2 2 2 2 2 2 queues 0 1 2 2              \
+	  map 2 2 1 0 2 2 2 2 2 2 2 2 2 2 2 2 queues 1@0 1@1 2@2          \
 	  sched-file gates.sched base-time $base clockid CLOCK_TAI
 
            We can read the above as:
             - there are 3 traffic classes (num_tc 3);
-            - SO_PRIORITY value 3 maps to TC 0, while value 2 maps to TC 1. 
+            - SO_PRIORITY value 3 maps to TC 0, while value 2 maps to TC 1.
               Everything else maps to the other (best-effort) traffic classes;
             - "queues 0 1 2 2" is a positional argument, meaning that TC 0 maps
               to queue 0, TC 1 maps to queue 1 and TC 2 maps to queues 2 and 3.
