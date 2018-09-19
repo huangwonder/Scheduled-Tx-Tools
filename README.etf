@@ -110,3 +110,18 @@ e.g.:	$ tshark -r tmp.pcap --disable-protocol dcp-etsi --disable-protocol \
 
 	$ ./txtime_offset_stats.py -f tmp.out
 
+
+
+# NOTE ON VLAN USAGE #
+
+If your tests require that VLAN tagging is performed by the end stations, then
+you must configure the kernel to do so. There are different ways to approach that,
+one of them is to create a vlan interface that knows how to map from a socket
+priority to the VLAN PCP.
+
+e.g.:	$ ip link add link enp2s0 name enp2s0.2 type vlan id 2 egress 2:2 3:3
+	$ ip link set dev enp2s0.2 up
+
+This maps socket priority 2 to PCP 2 and 3 to 3 for egress on a VLAN with id 2.
+The same can be done for ingress.
+
