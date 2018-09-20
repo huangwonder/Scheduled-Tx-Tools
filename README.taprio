@@ -69,7 +69,7 @@ qdiscs and the applications.
 	--gates.sched--
 	S 0x1 300000
 	S 0x2 300000
-	S 0xc 400000
+	S 0x4 400000
 
 
     5) Start capturing traffic:
@@ -99,7 +99,7 @@ qdiscs and the applications.
 	--gates.sched--
 	S 0x1 300000
 	S 0x2 300000
-	S 0xc 400000
+	S 0x4 400000
 
 
       2.1) Setup taprio with a base-time starting in 2min from now rounded down.
