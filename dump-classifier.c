@@ -18,6 +18,23 @@
 
 #define NUM_FILTERS 8
 #define NUM_ENTRIES 64
+#define MAX_ARGS 100
+
+/* TAPRIO */
+enum {
+	TC_TAPRIO_CMD_SET_GATES = 0x00,
+	TC_TAPRIO_CMD_SET_AND_HOLD = 0x01,
+	TC_TAPRIO_CMD_SET_AND_RELEASE = 0x02,
+};
+
+#define NEXT_ARG() \
+	do {								\
+		argv++;							\
+		if (--argc <= 0) {					\
+			fprintf(stderr, "Incomplete command\n");	\
+			exit(-1);					\
+		}							\
+	} while (0)
 
 enum traffic_flags {
 	TRAFFIC_FLAGS_TXTIME,
@@ -37,38 +54,36 @@ struct sched_entry {
 
 struct schedule {
 	struct sched_entry entries[NUM_ENTRIES];
-	uint64_t base_time;
+	int64_t base_time;
 	size_t current_entry;
 	size_t num_entries;
-	uint64_t cycle_time;
+	int64_t cycle_time;
 };
 
 static struct argp_option options[] = {
-	{"sched-file", 's', "SCHED_FILE", 0, "File containing the schedule" },
+	{"batch-file", 's', "BATCH_FILE", 0, "File containing the taprio configuration" },
 	{"dump-file", 'd', "DUMP_FILE", 0, "File containing the tcpdump dump" },
 	{"filters-file", 'f', "FILTERS_FILE", 0, "File containing the classfication filters" },
-	{"base-time", 'b', "TIME", 0, "Timestamp indicating when the schedule starts" },
 	{ 0 }
 };
 
 static struct tc_filter traffic_filters[NUM_FILTERS];
-static FILE *sched_file, *dump_file, *filters_file;
+static FILE *batch_file, *dump_file, *filters_file;
 static struct schedule schedule;
-static uint64_t base_time;
 
 static error_t parser(int key, char *arg, struct argp_state *state)
 {
 	switch (key) {
-	case 'd':
-		dump_file = fopen(arg, "r");
-		if (!dump_file) {
+	case 's':
+		batch_file = fopen(arg, "r");
+		if (!batch_file) {
 			perror("Could not open file, fopen");
 			exit(EXIT_FAILURE);
 		}
 		break;
-	case 's':
-		sched_file = fopen(arg, "r");
-		if (!sched_file) {
+	case 'd':
+		dump_file = fopen(arg, "r");
+		if (!dump_file) {
 			perror("Could not open file, fopen");
 			exit(EXIT_FAILURE);
 		}
@@ -80,9 +95,6 @@ static error_t parser(int key, char *arg, struct argp_state *state)
 			exit(EXIT_FAILURE);
 		}
 		break;
-	case 'b':
-		base_time = strtoull(arg, NULL, 0);
-		break;
 	}
 
 	return 0;
@@ -92,36 +104,97 @@ static struct argp argp = { options, parser };
 
 static void usage(void)
 {
-	fprintf(stderr, "dump-classifier -s <sched-file> -d <dump-file> -f <filters-file> -b <base-time>\n");
+	fprintf(stderr, "dump-classifier -s <tc batch file> -d <dump-file> -f <filters-file>\n");
 }
 
-static int parse_schedule(FILE *file, struct schedule *schedule,
-			  size_t max_entries, uint64_t base_time)
+/* split command line into argument vector */
+int makeargs(char *line, char *argv[], int max_args)
 {
-	uint32_t interval, gatemask;
-	size_t i = 0;
+	static const char ws[] = " \t\r\n";
+	char *cp = line;
+	int argc = 0;
 
-	while (fscanf(file, "%*s %x %" PRIu32 "\n",
-		      &gatemask, &interval) != EOF)  {
-		struct sched_entry *entry;
+	while (*cp) {
+		/* skip leading whitespace */
+		cp += strspn(cp, ws);
 
-		if (i >= max_entries)
-			return -EINVAL;
+		if (*cp == '\0')
+			break;
 
-		entry = &schedule->entries[i];
+		if (argc >= (max_args - 1))
+			return -1;
 
-		entry->gatemask = gatemask;
-		entry->interval = interval;
+		/* word begins with quote */
+		if (*cp == '\'' || *cp == '"') {
+			char quote = *cp++;
 
-		i++;
+			argv[argc++] = cp;
+			/* find ending quote */
+			cp = strchr(cp, quote);
+			if (cp == NULL) {
+				fprintf(stderr, "Unterminated quoted string\n");
+				exit(1);
+			}
+		} else {
+			argv[argc++] = cp;
+
+			/* find end of word */
+			cp += strcspn(cp, ws);
+			if (*cp == '\0')
+				break;
+		}
+
+		/* seperate words */
+		*cp++ = 0;
 	}
+	argv[argc] = NULL;
 
-	schedule->base_time = base_time;
-	schedule->current_entry = 0;
-	schedule->num_entries = i;
+	return argc;
+}
 
-	return i;
+/* Like glibc getline but handle continuation lines and comments */
+ssize_t getcmdline(char **linep, size_t *lenp, FILE *in)
+{
+	ssize_t cc;
+	char *cp;
 
+	cc = getline(linep, lenp, in);
+	if (cc < 0)
+		return cc;	/* eof or error */
+
+	cp = strchr(*linep, '#');
+	if (cp)
+		*cp = '\0';
+
+	while ((cp = strstr(*linep, "\\\n")) != NULL) {
+		char *line1 = NULL;
+		size_t len1 = 0;
+		ssize_t cc1;
+
+		cc1 = getline(&line1, &len1, in);
+		if (cc1 < 0) {
+			fprintf(stderr, "Missing continuation line\n");
+			return cc1;
+		}
+
+		*cp = 0;
+
+		cp = strchr(line1, '#');
+		if (cp)
+			*cp = '\0';
+
+		*lenp = strlen(*linep) + strlen(line1) + 1;
+		*linep = realloc(*linep, *lenp);
+		if (!*linep) {
+			fprintf(stderr, "Out of memory\n");
+			*lenp = 0;
+			return -1;
+		}
+		cc += cc1 - 2;
+		strcat(*linep, line1);
+		free(line1);
+	}
+	return cc;
 }
 
 static int parse_filters(pcap_t *handle, FILE *file,
@@ -148,6 +221,134 @@ static int parse_filters(pcap_t *handle, FILE *file,
 	}
 
 	return i;
+}
+
+static int str_to_entry_cmd(const char *str)
+{
+	if (strcmp(str, "S") == 0)
+		return TC_TAPRIO_CMD_SET_GATES;
+
+	if (strcmp(str, "H") == 0)
+		return TC_TAPRIO_CMD_SET_AND_HOLD;
+
+	if (strcmp(str, "R") == 0)
+		return TC_TAPRIO_CMD_SET_AND_RELEASE;
+
+	return -1;
+}
+
+int get_u32(uint32_t *val, const char *arg, int base)
+{
+	unsigned long res;
+	char *ptr;
+
+	if (!arg || !*arg)
+		return -1;
+	res = strtoul(arg, &ptr, base);
+
+	/* empty string or trailing non-digits */
+	if (!ptr || ptr == arg || *ptr)
+		return -1;
+
+	/* overflow */
+	if (res == ULONG_MAX && errno == ERANGE)
+		return -1;
+
+	/* in case UL > 32 bits */
+	if (res > 0xFFFFFFFFUL)
+		return -1;
+
+	*val = res;
+	return 0;
+}
+
+int get_s64(int64_t *val, const char *arg, int base)
+{
+	long res;
+	char *ptr;
+
+	errno = 0;
+
+	if (!arg || !*arg)
+		return -1;
+	res = strtoll(arg, &ptr, base);
+	if (!ptr || ptr == arg || *ptr)
+		return -1;
+	if ((res == LLONG_MIN || res == LLONG_MAX) && errno == ERANGE)
+		return -1;
+	if (res > INT64_MAX || res < INT64_MIN)
+		return -1;
+
+	*val = res;
+	return 0;
+}
+
+static int parse_batch_file(FILE *file, struct schedule *schedule, size_t max_entries)
+{
+	int argc;
+	char *arguments[MAX_ARGS];
+	char **argv;
+	size_t len;
+	char *line = NULL;
+	int err;
+
+	if (getcmdline(&line, &len, file) < 0) {
+		fprintf(stderr, "Could not read batch file\n");
+		exit(EXIT_FAILURE);
+	}
+
+	argc = makeargs(line, arguments, MAX_ARGS);
+	if (argc < 0) {
+		fprintf(stderr, "Could not parse arguments\n");
+		return -1;
+	}
+
+	argv = arguments;
+
+	while (argc > 0) {
+	        if (strcmp(*argv, "sched-entry") == 0) {
+			struct sched_entry *e;
+
+			if (schedule->num_entries >= max_entries) {
+				fprintf(stderr, "The maximum number of schedule entries is %zu\n", max_entries);
+				return -1;
+			}
+
+			e = &schedule->entries[schedule->num_entries];
+
+			NEXT_ARG();
+			err = str_to_entry_cmd(*argv);
+			if (err < 0) {
+				fprintf(stderr, "Could not parse command (found %s)\n", *argv);
+				return  -1;
+			}
+			e->command = err;
+
+			NEXT_ARG();
+			if (get_u32(&e->gatemask, *argv, 16)) {
+				fprintf(stderr, "Could not parse gatemask (found %s)\n", *argv);
+				return -1;
+			}
+
+			NEXT_ARG();
+			if (get_u32(&e->interval, *argv, 0)) {
+				fprintf(stderr, "Could not parse interval (found %s)\n", *argv);
+				return -1;
+			}
+
+			schedule->num_entries++;
+
+		} else if (strcmp(*argv, "base-time") == 0) {
+			NEXT_ARG();
+			if (get_s64(&schedule->base_time, *argv, 10)) {
+				fprintf(stderr, "Could not parse base-time (found %s)\n", *argv);
+				return -1;
+			}
+		}
+		argc--; argv++;
+	}
+
+	return 0;
 }
 
 /* libpcap re-uses the timeval struct for nanosecond resolution when
@@ -309,13 +510,13 @@ int main(int argc, char **argv)
 
 	argp_parse(&argp, argc, argv, 0, NULL, NULL);
 
-	if (!dump_file || !sched_file || !filters_file || !base_time) {
+	if (!dump_file || !batch_file || !filters_file) {
 		usage();
 		exit(EXIT_FAILURE);
 	}
 
-	err = parse_schedule(sched_file, &schedule, NUM_ENTRIES, base_time);
-	if (err <= 0) {
+	err = parse_batch_file(batch_file, &schedule, NUM_ENTRIES);
+	if (err < 0) {
 		fprintf(stderr, "Could not parse schedule file (or file empty)\n");
 		exit(EXIT_FAILURE);
 	}
