@@ -25,7 +25,7 @@ $ make
 How to run
 ----------
 
-$ ./dump-classifier -s <BATCH FILE> -f <FILTER FILE> -b <BASE TIME> -d <DUMP FILE>
+$ ./dump-classifier -s <BATCH FILE> -f <FILTER FILE> -d <DUMP FILE>
 
 <BATCH FILE> is a text file containg a batch file intended for use
 with 'tc -batch', this allows dump-classifier to use the same file

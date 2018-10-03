@@ -191,5 +191,4 @@ The same can be done for ingress.
        time-slices. The base-time comes from the udp_tai for TC 0 minus the
        250us txtime offset as used below. For example:
 
-        ./dump-classifier -b 1528320726000000000 -d tmp.pcap -f filter \
-          -s taprio.batch | grep -v ontime
+        ./dump-classifier -d tmp.pcap -f filter -s taprio.batch | grep -v ontime
