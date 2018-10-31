@@ -113,8 +113,8 @@ int main(int argc, char** argv)
 	printf("rt latency:\t%llu\n", lat_rt);
 	printf("tai latency:\t%llu\n", lat_tai);
 	printf("phc latency:\t%llu\n", lat_ptp);
-	printf("phc-rt delta:\t%llu\n", ptp - rt);
-	printf("phc-tai delta:\t%llu\n", ptp - tai);
+	printf("phc-rt delta:\t%lld\n", ptp - rt);
+	printf("phc-tai delta:\t%lld\n", ptp - tai);
 
 	close(fd_ptp);
 
